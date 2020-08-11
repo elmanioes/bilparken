@@ -1,0 +1,307 @@
+---
+title: "Audi"
+author: "MV"
+date: "6/8/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Norgesbilparken og gassutslipp av Audissaken 
+
+Carga de librerias:
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(knitr)
+library(kableExtra)
+library(tidyverse)
+```
+
+
+## Data nedlasting:
+01960: Registrerte kjøretøy, etter statistikkvariabel og år
+https://www.ssb.no/bilreg
+
+
+
+```{r}
+library(readr)
+veh_matric_1950_2020 <- read_delim("C:/mio/Big/estudios_mv/veh_matric_1950_2020.csv", 
+    ";", escape_double = FALSE, locale = locale(encoding = "ISO-8859-1"), 
+    trim_ws = TRUE)
+View(veh_matric_1950_2020)
+
+```
+
+## Norsk kjøretøyregistrering grafen (1950-2020)
+
+
+```{r}
+
+registreret <- veh_matric_1950_2020
+registreret$vehic <- as.numeric(registreret$vehic)
+
+registreret %>% filter (Typer == "Kjøretøy i alt") %>% 
+  select(år,vehic)%>%
+  slice(seq(1,80,10),66:70)%>%
+  spread(år, vehic)%>% #transponer la tabla
+  kable() %>%
+  kable_styling(full_width = F, position = "center", font_size = 10) %>%
+  row_spec(row = 0, background="green", bold=T, color="white")
+
+
+
+registreret %>% filter (Typer == "Kjøretøy i alt") %>% 
+                ggplot (aes(x=år, y=vehic/1000)) + 
+                labs(title = "Registreret i Norge", x="år", y= "kjøretøy (i tusen)")+
+                geom_line(alpha = 0.5, size = 1.5, color = "blue")+
+                scale_y_continuous(breaks=seq(0,6000,by=1000))+
+                scale_x_continuous(breaks=seq(1950,2020,by=10))
+  
+```
+
+# Transpone todas las columnas menos la primer
+df_transpose <- data.frame(t(df[-1]))
+# Añadimos los nombres de las columnas
+colnames(df_transpose) <- df[, 1]
+df_transpose
+
+
+
+
+
+## Registrert i Norge etter kjøretøytype
+
+### Graf
+
+```{r}
+
+registreret %>% filter (Typer != "Kjøretøy i alt") %>%
+                group_by (Typer, år ) %>%
+                mutate_all(~replace(., is.na(.), 0))%>%
+                #summarize(sum_veh = sum(vehic)) %>%
+                ggplot (aes(x=år, y=vehic, color = Typer)) + 
+                labs(title = "Registreret i Norge per typer", x="år", y= "kjøretøy")+
+                geom_line(alpha = 0.5, size = 1.5)+
+                scale_y_continuous(breaks=seq(0,3000000,by=500000))+
+                scale_x_continuous(breaks=seq(1950,2025,by=10))
+
+
+```
+
+### Tabell
+
+```{r}
+Total_2019 <- registreret %>% 
+  filter (Typer != "Kjøretøy i alt" & år == 2019)%>%
+  summarise(sum(vehic, na.rm = TRUE ))
+
+
+registreret %>% filter (Typer != "Kjøretøy i alt" & år == 2019) %>%
+  group_by (Typer, år ) %>%
+  arrange (desc(vehic)) %>%
+  # summarise(total(sum(vehic, na.rm = TRUE))) %>%
+  # mutate(prosent = paste0(round(100*vehic / total ,2),"%"))
+  #mutate(prosent = paste0(round(100*vehic /sum(vehic, na.rm = TRUE),2),"%")) %>%
+  mutate(prosent = paste0(round(100*vehic / Total_2019,2),"%")) %>%
+  kable() %>%
+  kable_styling(full_width = F, position = "center", font_size = 10) %>%
+  column_spec(column = 3, width = "2cm", background = "orange", color = "black") %>%
+  row_spec(row = 0, background="green", bold=T, color="white")
+```
+
+## Data nedlasting:
+11823: Registrerte kjøretøy, etter region, drivstofftype, statistikkvariabel og år
+https://www.ssb.no/bilreg
+
+
+```{r}
+library(readxl)
+comb_kom_2019 <- read_excel("C:/mio/Big/estudios_mv/comb_kom_2019.xlsx", 
+    sheet = "Hoja1")
+View(comb_kom_2019)
+
+```
+
+### Tabell
+
+```{r}
+
+kommune <- comb_kom_2019
+
+kommune %>% 
+  group_by(Kom) %>% 
+  summarize(t2019 = sum(tall)) %>%
+  arrange(desc(t2019)) %>%
+  slice(1:10) %>%
+    kable() %>%
+  kable_styling(full_width = F, position = "center", font_size = 10) %>%
+  row_spec(row = 0, background="green", bold=T, color="white") 
+
+```
+
+### Drivstofftype - 2019
+
+```{r}
+kommune %>% 
+  #filter(ar == 2019)%>%
+  group_by(drivstofftype) %>% 
+  summarize(total_anual = sum(tall))%>%
+  ggplot(aes(reorder(drivstofftype,-total_anual),total_anual))+
+  geom_bar(stat="identity" , fill = "blue")+
+  labs(title = "Drivstofftype - år 2019", x="Drivstoff", y= "kjøretøy")+
+  geom_text(aes(label = total_anual,  vjust=-1 ), size = 3)+
+  theme(axis.text.x = element_text(angle = 30, hjust=1, size = 9))+
+  scale_y_continuous(limit = c(0,2500000), breaks=seq(0,2500000,by=500000))
+
+
+
+
+```
+
+### Diesel Kjoretoy
+
+```{r}
+kommune %>% 
+  filter(drivstofftype == "Diesel" | drivstofftype == "Diesel hybrid, ladbar" |drivstofftype == "Diesel hybrid, ikke ladbar" )%>%
+  group_by(kjøretøy) %>% 
+  summarize(total_anual = sum(tall))%>%
+  ggplot(aes(reorder(kjøretøy ,-total_anual),total_anual))+
+  geom_bar(stat="identity" , fill = "blue")+
+  labs(title = "Diesel Kjøretøy  - år 2019", x="Kjøretøy typer", y= "kjøretøy")+
+  geom_text(aes(label = total_anual,vjust=-1 ), size = 3)+
+  theme(axis.text.x = element_text(angle = 30, hjust=1, size = 9))+
+  scale_y_continuous(limit = c(0,1500000), breaks=seq(0,1500000,by=250000))
+
+```
+
+## Bilmarker
+### Data nedlasting:
+08581: Registrerte person- og varebiler, etter bilmerke, statistikkvariabel og år
+https://www.ssb.no/bilreg
+
+
+```{r}
+library(readr)
+marker_bil_2019 <- read_delim("C:/mio/Big/estudios_mv/marker_bil_2019.csv", 
+    ";", escape_double = FALSE, locale = locale(encoding = "ISO-8859-1"), 
+    trim_ws = TRUE)
+View(marker_bil_2019)
+```
+
+
+#Bilmerker
+
+## Audi i Norge
+
+
+```{r}
+marker <- marker_bil_2019
+colnames(marker)
+
+names(marker) <- c("bilmerke", "alder", "personbiler2019", "varebiler2019")
+
+# Tabell
+
+marker %>%
+  group_by(bilmerke)%>%
+  summarise(total_bil= sum(personbiler2019))%>%
+  filter(total_bil > 100000) %>%
+  mutate(rank = rank(-total_bil))%>% 
+  arrange(desc(total_bil)) %>%
+  kable() %>%
+  kable_styling(full_width = F, position = "center", font_size = 10) %>%
+  row_spec(row = 0, background="green", bold=T, color="white") %>%
+  row_spec(row = 7, background="yellow", bold=T, color="black")
+
+
+# Graf
+
+marker %>%
+  group_by(bilmerke)%>%
+  summarise (tot_merke = sum(personbiler2019)) %>% 
+  filter (tot_merke >20000)%>% 
+  arrange(desc(tot_merke)) %>%
+  ggplot(aes(reorder(bilmerke,-tot_merke),tot_merke, fill = bilmerke == "Audi"))+
+  scale_fill_manual(values = c("blue", "red"))+
+  geom_bar(stat="identity") +
+  guides(fill=FALSE)+
+  labs(title = "Marker Kjøretøy  - år 2019", x="Merker", y= "kjøretøy")+
+  theme(axis.text.x = element_text(angle = 30, hjust=1, size = 9))
+
+
+
+```
+
+Alder på personbiler i Norge (2019)
+
+```{r}
+marker$alder <- as.factor(marker$alder)
+levels(marker$alder)
+# Para cambiar este orden usamos la funcion "factor".
+marker$alder = factor(marker$alder, levels=c("Under 4 år", "4 - 7 år", "8 - 11 år", "12 - 15 år", "16 - 20 år", "Over 20 år"))
+levels(marker$alder)
+
+```
+## Audi og alle andre merker
+
+```{r}
+marker %>%
+  select(-varebiler2019)%>%
+  group_by(alder, bilmerke)%>%
+  summarise(total_bil= sum(personbiler2019))%>%
+  filter(total_bil > 12000) %>%
+  ggplot(aes(x= alder, y = total_bil, color = bilmerke, size= bilmerke == "Audi"))+
+  #scale_color_manual(values = c("blue", "red"))+
+  geom_point() +
+  guides(size=FALSE)+
+  labs(title = "Bilparkens Alder  - år 2019", x="Alder", y= "kjøretøy")+
+  theme(axis.text.x = element_text(angle = 30, hjust=1, size = 9))
+  #scale_y_continuous(limit = c(0,100000), breaks=seq(0,100000,by=10000))
+  #+geom_jitter() 
+```
+
+
+
+## Audi-biler registrert i Norge fra perioden solgt mellom 2009 og 2015
+
+```{r}
+
+marker %>%
+  filter (bilmerke =="Audi")%>%
+  group_by(alder)%>%
+  select(alder,personbiler2019) %>%
+  kable() %>%
+  kable_styling(full_width = F, position = "center", font_size = 10)%>%
+  row_spec(row = 0, background="green", bold=T, color="white") %>%
+  row_spec(row = 2:3, background="yellow", bold=T, color="black") 
+
+  
+
+marker %>%
+  filter (bilmerke =="Audi")%>%
+  group_by(alder)%>%
+  select(alder,personbiler2019) %>%
+  ggplot(aes(alder, personbiler2019, size = 15,
+             color = (alder == "4 - 7 år"  | alder == "8 - 11 år")))+
+  geom_point() +
+  #scale_color_manual(values = c("blue", "red"))+
+  scale_colour_manual("gases", labels = c("ok", "problem"),values = c("green","red"))+ 
+  guides(size=FALSE)+
+  labs(title = "Audis Alder - år 2019", x="Alder", y= "biler", subtitle = "problemas de gases")
+  
+
+
+
+
+```
+
+
+
+
+
+
